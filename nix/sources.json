@@ -1,0 +1,38 @@
+{
+    "cardano-db-sync": {
+        "branch": "master",
+        "description": "Cardano DB Sync",
+        "homepage": "",
+        "owner": "input-output-hk",
+        "repo": "cardano-db-sync",
+        "rev": "340b96b65d471456b80e169c4a0b1c8f264af31d",
+        "sha256": "08w50dy1j9jvpyssray84vvkw2nhng9ssq4c7ykgbpzd6qmp0j9b",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/cardano-db-sync/archive/340b96b65d471456b80e169c4a0b1c8f264af31d.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "plutus-apps": {
+        "branch": "main",
+        "description": "The Plutus application platform",
+        "homepage": "",
+        "owner": "input-output-hk",
+        "repo": "plutus-apps",
+        "rev": "63deb7d7ebd1c8c8ddf2640e1873d8f0f49559a1",
+        "sha256": "1na7jvqiwjsnaz2wqlv8w99s51wxfrikyqb63zpkax5i9w88w3xr",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/plutus-apps/archive/63deb7d7ebd1c8c8ddf2640e1873d8f0f49559a1.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "pre-commit-hooks-nix": {
+        "branch": "master",
+        "description": "Seamless integration of https://pre-commit.com git hooks with Nix.",
+        "homepage": "",
+        "owner": "cachix",
+        "repo": "pre-commit-hooks.nix",
+        "rev": "b6bc0b21e1617e2b07d8205e7fae7224036dfa4b",
+        "sha256": "1mpj9qp5768xkgqah0y2y8gbyaklzka1bfvf3dk9vi5y68rqfm82",
+        "type": "tarball",
+        "url": "https://github.com/cachix/pre-commit-hooks.nix/archive/b6bc0b21e1617e2b07d8205e7fae7224036dfa4b.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    }
+}

@@ -1,0 +1,46 @@
+cabal-version:      2.4
+name:               cardano-tx
+version:            0.1.0.0
+author:             Sławomir Śledź
+maintainer:         slawomir.sledz@gmail.com
+
+common base
+    build-depends: base >= 4.14 && < 4.15
+
+common project-config
+    default-extensions:
+        OverloadedStrings
+    default-language:   Haskell2010
+    ghc-options:
+      -Wall
+      -Wcompat
+      -Wincomplete-record-updates
+      -Wincomplete-uni-patterns
+      -Wpartial-fields
+      -Wredundant-constraints
+      -Wunused-packages
+      -fobject-code
+      -fno-ignore-interface-pragmas
+      -fno-omit-interface-pragmas
+
+library
+    import: base, project-config
+    exposed-modules:
+        MyLib
+    build-depends:
+        bytestring
+      , text
+      , aeson
+      , extra
+      , http-client
+      , http-client-tls
+      , http-conduit
+      , cardano-api
+      , plutus-core
+      , plutus-ledger
+      , plutus-ledger-api
+      , plutus-tx
+      , plutus-tx-plugin
+      , serialise
+    hs-source-dirs:   src
+
