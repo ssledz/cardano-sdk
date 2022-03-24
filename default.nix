@@ -7,10 +7,10 @@ let
 
 in
 {
-  inherit pkgs plutus sdk;
+  inherit pkgs plutus plutus-starter;
 
   inherit project;
 
   devcontainer =
-    import ./nix/devcontainer/dex-devcontainer.nix { inherit pkgs sdk; };
+    import ./nix/devcontainer/dex-devcontainer.nix { inherit pkgs plutus-starter; };
 }

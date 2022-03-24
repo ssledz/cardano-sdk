@@ -5,6 +5,6 @@ let
 
 in
 haskell.project.shellFor {
-  packages = ps: [ ps.simple-swap ];
+  packages = ps: [ ps.cardano-tx ];
   withHoogle = true;
 }
