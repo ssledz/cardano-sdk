@@ -5,6 +5,8 @@ import           Cardano.Sdk.Adapter.Koios
 import           Cardano.Sdk.Adapter.Node
 import           Cardano.Sdk.Address
 import           Cardano.Sdk.Transaction.Data
+import           Control.Monad
+import qualified Data.Map                     as M
 import           RIO
 
 main :: IO ()
@@ -17,9 +19,17 @@ main = do
   let value1 = toLedgerValue addrInfo
   utxos <- queryUtxo conn $ maybeToList (parseAsAnyAddress addr)
   let value2 = toLedgerValue utxos
-  print value1
-  print value2
+  --print value1
+  --print value2
   print $ value1 == value2
   let utxos1 = toLedgerUtxO addrInfo
   let utxos2 = toLedgerUtxO utxos
   print $ utxos1 == utxos2
+  let keys1 = M.keys . unUtxO $ utxos1
+  let keys2 = M.keys . unUtxO $ utxos2
+  print $ keys1 == keys2
+  --forM_ keys1 print
+  --print "------------"
+  --forM_ keys2 print
+  --print addrInfo
+

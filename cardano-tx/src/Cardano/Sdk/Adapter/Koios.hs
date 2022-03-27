@@ -7,23 +7,22 @@
 module Cardano.Sdk.Adapter.Koios where
 
 import qualified Cardano.Api                  as C
+import           Cardano.Sdk.Address
 import           Cardano.Sdk.Transaction.Data
 import           Data.Aeson
+import qualified Data.ByteString.Base16       as BS16 (decode)
+import qualified Data.ByteString.Char8        as BSC
 import           Data.Either.Extra
+import qualified Data.Map                     as M
+import           Data.String
 import qualified Data.Text                    as T
 import qualified Data.Text.Encoding           as TE
 import           GHC.Generics                 (Generic)
+import qualified Ledger                       as L
 import           Network.HTTP.Simple
 import qualified Plutus.V1.Ledger.Ada         as L
-import qualified Plutus.V1.Ledger.Api         as L
-import qualified Plutus.V1.Ledger.Tx          as L
-import qualified Plutus.V2.Ledger.Api         as L
-
-import           Cardano.Sdk.Address
-import qualified Data.ByteString.Base16       as BS16 (decode)
-import qualified Data.ByteString.Char8        as BSC
-import qualified Data.Map                     as M
-import           Data.String
+import qualified Plutus.V1.Ledger.Value       as LV
+import qualified PlutusTx.AssocMap            as P
 import           PlutusTx.Foldable
 import           RIO
 
@@ -32,7 +31,7 @@ newtype KoiosConfig = KoiosConfig { url :: T.Text }
 data WithAddress a = WithAddress
   { address :: T.Text
   , entity  :: a
-  }
+  } deriving (Show, Eq)
 
 data AddressUtxo = AddressUtxo
   { tx_hash    :: T.Text
@@ -55,9 +54,7 @@ data AddressAsset = AddressAsset
   } deriving (Generic, Show, FromJSON)
 
 instance ToLedgerTxId AddressUtxo where
-  toLedgerTxId AddressUtxo{..} = L.TxId hash
-    where
-      hash = fromString $ T.unpack tx_hash
+  toLedgerTxId AddressUtxo{..} = fromString $ T.unpack tx_hash
 
 instance ToLedgerTxIn AddressUtxo where
   toLedgerTxIn utxo@AddressUtxo{..} = L.TxIn txInRef txInType
@@ -71,12 +68,12 @@ instance ToLedgerValue AddressInfo where
 instance ToLedgerValue AddressUtxo where
   toLedgerValue AddressUtxo{..} = adaValue <> assetValue
     where
-      adaValue = L.singleton L.adaSymbol L.adaToken $ read (T.unpack value)
+      adaValue = LV.singleton L.adaSymbol L.adaToken $ read (T.unpack value)
       assetValue = toLedgerValue asset_list
 
 instance ToLedgerValue AddressAsset where
   toLedgerValue AddressAsset{..} =
-    L.Value $ L.fromList [(currency, L.fromList [(token, read quantity)])]
+    LV.Value $ P.fromList [(currency, P.fromList [(token, read quantity)])]
       where
         currency = fromString $ T.unpack policy_id
         unhex s = BSC.unpack <$> BS16.decode (BSC.pack s)
