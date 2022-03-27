@@ -31,7 +31,8 @@ instance ToLedgerTxIn TxIn where
 instance ToLedgerTxOut (TxOut CtxUTxO era) where
   toLedgerTxOut (TxOut addr value datumHash) = L.TxOut addr' value' datumHash'
     where
-      addr' = fromRight undefined $ Conv.fromCardanoAddress addr
+      -- TODO: make it safe
+      addr' = fromRight (error $ "error during parsing address: " <> show addr) $ Conv.fromCardanoAddress addr
       value' = toLedgerValue value
       datumHash' = case datumHash of
                      TxOutDatumNone -> Nothing

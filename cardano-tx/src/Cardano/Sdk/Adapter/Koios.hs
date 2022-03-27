@@ -86,7 +86,8 @@ instance ToLedgerValue a => ToLedgerValue (WithAddress a) where
 instance ToLedgerTxOut (WithAddress AddressUtxo) where
   toLedgerTxOut (WithAddress addr utxo@AddressUtxo{..}) = L.TxOut addr' value datumHash
     where
-      addr' = fromMaybe undefined $ readShellyAddress addr
+      -- TODO: make it safe
+      addr' = fromMaybe (error $ "error parsing address: " <> show addr) $ readShellyAddress addr
       value = toLedgerValue utxo
       datumHash = fromString . T.unpack <$> datum_hash
 
