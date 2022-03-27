@@ -1,9 +1,9 @@
-module Cardano.Sdk.Transaction.Manual where
+module Cardano.Sdk.Manual where
 
-import qualified Cardano.Api                           as C
+import qualified Cardano.Api                  as C
+import           Cardano.Sdk.Adapter.Koios
+import           Cardano.Sdk.Adapter.Node
 import           Cardano.Sdk.Address
-import           Cardano.Sdk.Transaction.Adapter.Koios
-import           Cardano.Sdk.Transaction.Adapter.Node
 import           Cardano.Sdk.Transaction.Data
 import           RIO
 
@@ -14,7 +14,9 @@ main = do
   let koiosConfig = KoiosConfig "https://testnet.koios.rest"
   let addr = "addr_test1qp72kluzgdnl8h5cazhctxv773zrq7dzq8y50q2vr9w2v2laj7qf05z8tpyhc0k5kkks3083uthryl3leeufkfz6j0pq03n8ck"
   addrInfo <- queryAddressInfo koiosConfig addr
-  print addrInfo
-  print $ toLedgerValue addrInfo
+  let value1 = toLedgerValue addrInfo
   utxos <- queryUtxo conn $ maybeToList (parseAsAnyAddress addr)
-  print utxos
+  let value2 = toLedgerValue utxos
+  print value1
+  print value2
+  print $ value1 == value2

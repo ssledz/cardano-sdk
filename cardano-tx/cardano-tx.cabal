@@ -26,14 +26,15 @@ common project-config
 library
     import: base, project-config
     exposed-modules:
-        Cardano.Sdk.Transaction.Adapter.Node
-      , Cardano.Sdk.Transaction.Adapter.Koios
+        Cardano.Sdk.Adapter.Node
+      , Cardano.Sdk.Adapter.Koios
       , Cardano.Sdk.Transaction.Data
-      , Cardano.Sdk.Transaction.Manual
+      , Cardano.Sdk.Manual
       , Cardano.Sdk.Address
       , MyLib
     build-depends:
         bytestring
+      , base16-bytestring 
       , text
       , aeson
       , extra

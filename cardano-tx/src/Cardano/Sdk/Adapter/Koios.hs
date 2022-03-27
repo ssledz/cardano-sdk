@@ -3,11 +3,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Cardano.Sdk.Transaction.Adapter.Koios where
+module Cardano.Sdk.Adapter.Koios where
 
 import qualified Cardano.Api                  as C
 import           Cardano.Sdk.Transaction.Data
 import           Data.Aeson
+import           Data.Either.Extra
 import qualified Data.Text                    as T
 import qualified Data.Text.Encoding           as TE
 import           GHC.Generics                 (Generic)
@@ -17,6 +18,8 @@ import qualified Plutus.V1.Ledger.Api         as L
 import qualified Plutus.V1.Ledger.Tx          as L
 import qualified Plutus.V2.Ledger.Api         as L
 
+import qualified Data.ByteString.Base16       as BS16 (decode)
+import qualified Data.ByteString.Char8        as BSC
 import           Data.String
 import           PlutusTx.Foldable
 
@@ -64,7 +67,9 @@ instance ToLedgerValue AddressAsset where
     L.Value $ L.fromList [(currency, L.fromList [(token, read quantity)])]
       where
         currency = fromString $ T.unpack policy_id
-        token = fromString $ T.unpack asset_name
+        unhex s = BSC.unpack <$> BS16.decode (BSC.pack s)
+        token = let str = T.unpack asset_name
+                in fromString $ fromRight str (unhex str)
 
 queryAddressInfo :: KoiosConfig -> T.Text -> IO [AddressInfo]
 queryAddressInfo KoiosConfig {..} addr = do
