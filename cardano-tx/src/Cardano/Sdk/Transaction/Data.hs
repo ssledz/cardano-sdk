@@ -7,7 +7,7 @@ import           Ledger
 import           PlutusTx.Foldable (fold)
 
 
-newtype UtxO = UtxO { unUtO :: M.Map TxIn TxOut } deriving (Show)
+newtype UtxO = UtxO { unUtO :: M.Map TxIn TxOut } deriving (Show, Eq)
 
 instance Semigroup UtxO where
   UtxO a <> UtxO b = UtxO $ a <> b

@@ -20,4 +20,6 @@ main = do
   print value1
   print value2
   print $ value1 == value2
-  print $ toLedgerUtxO addrInfo
+  let utxos1 = toLedgerUtxO addrInfo
+  let utxos2 = toLedgerUtxO utxos
+  print $ utxos1 == utxos2
