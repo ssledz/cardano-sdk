@@ -7,7 +7,13 @@ import           Ledger
 import           PlutusTx.Foldable (fold)
 
 
-newtype UtxO = UtxO { unUtO :: M.Map TxIn TxOut }
+newtype UtxO = UtxO { unUtO :: M.Map TxIn TxOut } deriving (Show)
+
+instance Semigroup UtxO where
+  UtxO a <> UtxO b = UtxO $ a <> b
+
+instance Monoid UtxO where
+  mempty = UtxO mempty
 
 class ToLedgerTxOutRef a where
   toLedgerTxOutRef :: a -> TxOutRef
@@ -24,7 +30,13 @@ class ToLedgerTxOut a where
 class ToLedgerValue a where
   toLedgerValue :: a -> Value
 
+class ToLedgerUtxO a where
+  toLedgerUtxO :: a -> UtxO
+
 instance ToLedgerValue a => ToLedgerValue [a] where
   toLedgerValue xs = fold $ toLedgerValue <$> xs
+
+instance ToLedgerUtxO a => ToLedgerUtxO [a] where
+  toLedgerUtxO xs = mconcat $ toLedgerUtxO <$> xs
 
 

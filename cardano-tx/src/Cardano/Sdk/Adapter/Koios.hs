@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -18,29 +19,40 @@ import qualified Plutus.V1.Ledger.Api         as L
 import qualified Plutus.V1.Ledger.Tx          as L
 import qualified Plutus.V2.Ledger.Api         as L
 
+import           Cardano.Sdk.Address
 import qualified Data.ByteString.Base16       as BS16 (decode)
 import qualified Data.ByteString.Char8        as BSC
+import qualified Data.Map                     as M
 import           Data.String
 import           PlutusTx.Foldable
+import           RIO
 
 newtype KoiosConfig = KoiosConfig { url :: T.Text }
 
-data AddressUtxo = AddressUtxo { tx_hash    :: T.Text
-                               , tx_index   :: Integer
-                               , value      :: T.Text
-                               , datum_hash :: Maybe T.Text
-                               , asset_list :: [AddressAsset]
-                               } deriving (Generic, Show, FromJSON)
+data WithAddress a = WithAddress
+  { address :: T.Text
+  , entity  :: a
+  }
 
-data AddressInfo = AddressInfo { balance        :: T.Text
-                               , script_address :: Bool
-                               , utxo_set       :: [AddressUtxo]
-                               } deriving (Generic, Show, FromJSON)
+data AddressUtxo = AddressUtxo
+  { tx_hash    :: T.Text
+  , tx_index   :: Integer
+  , value      :: T.Text
+  , datum_hash :: Maybe T.Text
+  , asset_list :: [AddressAsset]
+  } deriving (Generic, Show, FromJSON)
 
-data AddressAsset = AddressAsset { policy_id  :: T.Text
-                                 , asset_name :: T.Text
-                                 , quantity   :: String
-                                 } deriving (Generic, Show, FromJSON)
+data AddressInfo = AddressInfo
+  { balance        :: T.Text
+  , script_address :: Bool
+  , utxo_set       :: [AddressUtxo]
+  } deriving (Generic, Show, FromJSON)
+
+data AddressAsset = AddressAsset
+  { policy_id  :: T.Text
+  , asset_name :: T.Text
+  , quantity   :: String
+  } deriving (Generic, Show, FromJSON)
 
 instance ToLedgerTxId AddressUtxo where
   toLedgerTxId AddressUtxo{..} = L.TxId hash
@@ -71,14 +83,35 @@ instance ToLedgerValue AddressAsset where
         token = let str = T.unpack asset_name
                 in fromString $ fromRight str (unhex str)
 
-queryAddressInfo :: KoiosConfig -> T.Text -> IO [AddressInfo]
-queryAddressInfo KoiosConfig {..} addr = do
+instance ToLedgerValue a => ToLedgerValue (WithAddress a) where
+  toLedgerValue (WithAddress _ a) = toLedgerValue a
+
+instance ToLedgerTxOut (WithAddress AddressUtxo) where
+  toLedgerTxOut (WithAddress addr utxo@AddressUtxo{..}) = L.TxOut addr' value datumHash
+    where
+      addr' = fromMaybe undefined $ readShellyAddress addr
+      value = toLedgerValue utxo
+      datumHash = fromString . T.unpack <$> datum_hash
+
+instance ToLedgerUtxO (WithAddress AddressInfo) where
+  toLedgerUtxO (WithAddress addr AddressInfo{..}) = UtxO $ M.fromList $ f <$> utxo_set
+    where
+      f utxo = (toLedgerTxIn utxo, toLedgerTxOut (WithAddress addr utxo))
+
+
+queryAddressInfo' :: KoiosConfig -> T.Text -> IO [AddressInfo]
+queryAddressInfo' KoiosConfig {..} addr = do
   request' <- parseRequest $ T.unpack ("GET " <> url)
   let request = setRequestHeaders [("Accept","application/json")]
               $ setRequestPath "/api/v0/address_info"
               $ setRequestQueryString [("_address", Just $ TE.encodeUtf8 addr)]
                 request'
   getResponseBody <$> httpJSON request
+
+queryAddressInfo :: KoiosConfig -> T.Text -> IO [WithAddress AddressInfo]
+queryAddressInfo cfg addr = fmap conv <$> queryAddressInfo' cfg addr
+  where
+    conv a = WithAddress addr a
 
 getAda :: AddressInfo -> L.Ada
 getAda = L.fromValue . toLedgerValue

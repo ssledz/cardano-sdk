@@ -20,3 +20,4 @@ main = do
   print value1
   print value2
   print $ value1 == value2
+  print $ toLedgerUtxO addrInfo
