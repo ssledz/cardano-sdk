@@ -26,10 +26,13 @@ import qualified PlutusTx.AssocMap            as P
 import           PlutusTx.Foldable
 import           RIO
 
-newtype KoiosConfig = KoiosConfig { url :: T.Text }
+data KoiosConfig = KoiosConfig
+  { kcUrl       :: T.Text
+  , kcNetworkId :: C.NetworkId
+  }
 
 data WithAddress a = WithAddress
-  { address :: T.Text
+  { address :: L.Address
   , entity  :: a
   } deriving (Show, Eq)
 
@@ -84,10 +87,8 @@ instance ToLedgerValue a => ToLedgerValue (WithAddress a) where
   toLedgerValue (WithAddress _ a) = toLedgerValue a
 
 instance ToLedgerTxOut (WithAddress AddressUtxo) where
-  toLedgerTxOut (WithAddress addr utxo@AddressUtxo{..}) = L.TxOut addr' value datumHash
+  toLedgerTxOut (WithAddress addr utxo@AddressUtxo{..}) = L.TxOut addr value datumHash
     where
-      -- TODO: make it safe
-      addr' = fromMaybe (error $ "error parsing address: " <> show addr) $ readShellyAddress addr
       value = toLedgerValue utxo
       datumHash = fromString . T.unpack <$> datum_hash
 
@@ -97,19 +98,16 @@ instance ToLedgerUtxO (WithAddress AddressInfo) where
       f utxo = (toLedgerTxIn utxo, toLedgerTxOut (WithAddress addr utxo))
 
 
-queryAddressInfo' :: KoiosConfig -> T.Text -> IO [AddressInfo]
-queryAddressInfo' KoiosConfig {..} addr = do
-  request' <- parseRequest $ T.unpack ("GET " <> url)
+queryAddressInfo :: KoiosConfig -> L.Address -> IO [WithAddress AddressInfo]
+queryAddressInfo KoiosConfig {..} addr = do
+  addr' <- maybe (throwString $ "Error rendering address: " <> show addr) return $ renderShellyAddress kcNetworkId addr
+  request' <- parseRequest $ T.unpack ("GET " <> kcUrl)
   let request = setRequestHeaders [("Accept","application/json")]
               $ setRequestPath "/api/v0/address_info"
-              $ setRequestQueryString [("_address", Just $ TE.encodeUtf8 addr)]
+              $ setRequestQueryString [("_address", Just $ TE.encodeUtf8 addr')]
                 request'
-  getResponseBody <$> httpJSON request
-
-queryAddressInfo :: KoiosConfig -> T.Text -> IO [WithAddress AddressInfo]
-queryAddressInfo cfg addr = fmap conv <$> queryAddressInfo' cfg addr
-  where
-    conv a = WithAddress addr a
+  info <- getResponseBody <$> httpJSON request
+  return $ WithAddress addr <$> info
 
 getAda :: AddressInfo -> L.Ada
 getAda = L.fromValue . toLedgerValue
