@@ -4,7 +4,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Cardano.Sdk.Adapter.Koios where
+module Cardano.Sdk.Adapter.Koios
+  ( WithAddress
+  , AddressInfo
+  , KoiosConfig (..)
+  , queryAddressInfo
+  )where
 
 import qualified Cardano.Api                  as C
 import           Cardano.Sdk.Address
@@ -109,6 +114,6 @@ queryAddressInfo KoiosConfig {..} addr = do
   info <- getResponseBody <$> httpJSON request
   return $ WithAddress addr <$> info
 
-getAda :: AddressInfo -> L.Ada
-getAda = L.fromValue . toLedgerValue
+getAda :: WithAddress AddressInfo -> L.Ada
+getAda = L.fromValue . toLedgerValue . entity
 
