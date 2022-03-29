@@ -26,9 +26,11 @@ common project-config
 library
     import: base, project-config
     exposed-modules:
-        Cardano.Sdk.Adapter.Node
-      , Cardano.Sdk.Adapter.Koios
-      , Cardano.Sdk.Transaction.Data
+        Cardano.Sdk.Adapter.Node.Connection
+        Cardano.Sdk.Adapter.Node.Shared
+        Cardano.Sdk.Adapter.Node.UTxO
+      , Cardano.Sdk.Adapter.Koios.UTxO
+      , Cardano.Sdk.UTxO
       , Cardano.Sdk.Manual
       , Cardano.Sdk.Address
       , MyLib

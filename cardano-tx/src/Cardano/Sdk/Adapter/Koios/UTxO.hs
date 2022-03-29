@@ -4,30 +4,31 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Cardano.Sdk.Adapter.Koios
+module Cardano.Sdk.Adapter.Koios.UTxO
   ( WithAddress
   , AddressInfo
   , KoiosConfig (..)
   , queryAddressInfo
+  , queryUTxo
   )where
 
-import qualified Cardano.Api                  as C
+import qualified Cardano.Api            as C
 import           Cardano.Sdk.Address
-import           Cardano.Sdk.Transaction.Data
+import           Cardano.Sdk.UTxO
 import           Data.Aeson
-import qualified Data.ByteString.Base16       as BS16 (decode)
-import qualified Data.ByteString.Char8        as BSC
+import qualified Data.ByteString.Base16 as BS16 (decode)
+import qualified Data.ByteString.Char8  as BSC
 import           Data.Either.Extra
-import qualified Data.Map                     as M
+import qualified Data.Map               as M
 import           Data.String
-import qualified Data.Text                    as T
-import qualified Data.Text.Encoding           as TE
-import           GHC.Generics                 (Generic)
-import qualified Ledger                       as L
+import qualified Data.Text              as T
+import qualified Data.Text.Encoding     as TE
+import           GHC.Generics           (Generic)
+import qualified Ledger                 as L
 import           Network.HTTP.Simple
-import qualified Plutus.V1.Ledger.Ada         as L
-import qualified Plutus.V1.Ledger.Value       as LV
-import qualified PlutusTx.AssocMap            as P
+import qualified Plutus.V1.Ledger.Ada   as L
+import qualified Plutus.V1.Ledger.Value as LV
+import qualified PlutusTx.AssocMap      as P
 import           PlutusTx.Foldable
 import           RIO
 
@@ -97,8 +98,8 @@ instance ToLedgerTxOut (WithAddress AddressUtxo) where
       value = toLedgerValue utxo
       datumHash = fromString . T.unpack <$> datum_hash
 
-instance ToLedgerUtxO (WithAddress AddressInfo) where
-  toLedgerUtxO (WithAddress addr AddressInfo{..}) = UtxO $ M.fromList $ f <$> utxo_set
+instance ToLedgerUTxO (WithAddress AddressInfo) where
+  toLedgerUTxO (WithAddress addr AddressInfo{..}) = UTxO $ M.fromList $ f <$> utxo_set
     where
       f utxo = (toLedgerTxIn utxo, toLedgerTxOut (WithAddress addr utxo))
 
@@ -113,6 +114,9 @@ queryAddressInfo KoiosConfig {..} addr = do
                 request'
   info <- getResponseBody <$> httpJSON request
   return $ WithAddress addr <$> info
+
+queryUTxo :: MonadIO m => KoiosConfig -> [L.Address] -> m UTxO
+queryUTxo cfg addrs = liftIO $ toLedgerUTxO . mconcat <$> mapM (queryAddressInfo cfg) addrs
 
 getAda :: WithAddress AddressInfo -> L.Ada
 getAda = L.fromValue . toLedgerValue . entity

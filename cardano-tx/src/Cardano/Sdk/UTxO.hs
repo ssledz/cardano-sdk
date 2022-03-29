@@ -1,4 +1,4 @@
-module Cardano.Sdk.Transaction.Data where
+module Cardano.Sdk.UTxO where
 
 import qualified Cardano.Api       as C
 import qualified Data.Map          as M
@@ -7,13 +7,13 @@ import           Ledger
 import           PlutusTx.Foldable (fold)
 
 
-newtype UtxO = UtxO { unUtxO :: M.Map TxIn TxOut } deriving (Show, Eq)
+newtype UTxO = UTxO { unUTxO :: M.Map TxIn TxOut } deriving (Show, Eq)
 
-instance Semigroup UtxO where
-  UtxO a <> UtxO b = UtxO $ a <> b
+instance Semigroup UTxO where
+  UTxO a <> UTxO b = UTxO $ a <> b
 
-instance Monoid UtxO where
-  mempty = UtxO mempty
+instance Monoid UTxO where
+  mempty = UTxO mempty
 
 class ToLedgerTxOutRef a where
   toLedgerTxOutRef :: a -> TxOutRef
@@ -30,13 +30,13 @@ class ToLedgerTxOut a where
 class ToLedgerValue a where
   toLedgerValue :: a -> Value
 
-class ToLedgerUtxO a where
-  toLedgerUtxO :: a -> UtxO
+class ToLedgerUTxO a where
+  toLedgerUTxO :: a -> UTxO
 
 instance ToLedgerValue a => ToLedgerValue [a] where
   toLedgerValue xs = fold $ toLedgerValue <$> xs
 
-instance ToLedgerUtxO a => ToLedgerUtxO [a] where
-  toLedgerUtxO xs = mconcat $ toLedgerUtxO <$> xs
+instance ToLedgerUTxO a => ToLedgerUTxO [a] where
+  toLedgerUTxO xs = mconcat $ toLedgerUTxO <$> xs
 
 
