@@ -1,6 +1,5 @@
 module Cardano.Sdk.UTxO where
 
-import qualified Cardano.Api       as C
 import qualified Data.Map          as M
 
 import           Ledger
@@ -38,5 +37,3 @@ instance ToLedgerValue a => ToLedgerValue [a] where
 
 instance ToLedgerUTxO a => ToLedgerUTxO [a] where
   toLedgerUTxO xs = mconcat $ toLedgerUTxO <$> xs
-
-

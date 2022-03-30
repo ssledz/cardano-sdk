@@ -5,11 +5,9 @@
 {-# LANGUAGE RecordWildCards   #-}
 
 module Cardano.Sdk.Adapter.Koios.UTxO
-  ( WithAddress
-  , AddressInfo
-  , KoiosConfig (..)
-  , queryAddressInfo
+  ( KoiosConfig (..)
   , queryUTxo
+  , queryValue
   )where
 
 import qualified Cardano.Api            as C
@@ -23,13 +21,11 @@ import qualified Data.Map               as M
 import           Data.String
 import qualified Data.Text              as T
 import qualified Data.Text.Encoding     as TE
-import           GHC.Generics           (Generic)
 import qualified Ledger                 as L
 import           Network.HTTP.Simple
 import qualified Plutus.V1.Ledger.Ada   as L
 import qualified Plutus.V1.Ledger.Value as LV
 import qualified PlutusTx.AssocMap      as P
-import           PlutusTx.Foldable
 import           RIO
 
 data KoiosConfig = KoiosConfig
@@ -93,9 +89,9 @@ instance ToLedgerValue a => ToLedgerValue (WithAddress a) where
   toLedgerValue (WithAddress _ a) = toLedgerValue a
 
 instance ToLedgerTxOut (WithAddress AddressUtxo) where
-  toLedgerTxOut (WithAddress addr utxo@AddressUtxo{..}) = L.TxOut addr value datumHash
+  toLedgerTxOut (WithAddress addr utxo@AddressUtxo{..}) = L.TxOut addr value' datumHash
     where
-      value = toLedgerValue utxo
+      value' = toLedgerValue utxo
       datumHash = fromString . T.unpack <$> datum_hash
 
 instance ToLedgerUTxO (WithAddress AddressInfo) where
@@ -115,9 +111,11 @@ queryAddressInfo KoiosConfig {..} addr = do
   info <- getResponseBody <$> httpJSON request
   return $ WithAddress addr <$> info
 
+queryAddressInfos :: KoiosConfig -> [L.Address] -> IO [WithAddress AddressInfo]
+queryAddressInfos cfg addrs = mconcat <$> mapM (queryAddressInfo cfg) addrs
+
 queryUTxo :: MonadIO m => KoiosConfig -> [L.Address] -> m UTxO
-queryUTxo cfg addrs = liftIO $ toLedgerUTxO . mconcat <$> mapM (queryAddressInfo cfg) addrs
+queryUTxo cfg addrs = liftIO $ toLedgerUTxO <$> queryAddressInfos cfg addrs
 
-getAda :: WithAddress AddressInfo -> L.Ada
-getAda = L.fromValue . toLedgerValue . entity
-
+queryValue :: MonadIO m => KoiosConfig -> [L.Address] -> m L.Value
+queryValue cfg addrs = liftIO $ toLedgerValue <$> queryAddressInfos cfg addrs

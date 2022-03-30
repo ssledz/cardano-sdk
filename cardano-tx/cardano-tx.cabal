@@ -28,8 +28,10 @@ library
     exposed-modules:
         Cardano.Sdk.Adapter.Node.Connection
         Cardano.Sdk.Adapter.Node.Shared
+        Cardano.Sdk.Adapter.Node.Network
         Cardano.Sdk.Adapter.Node.UTxO
       , Cardano.Sdk.Adapter.Koios.UTxO
+      , Cardano.Sdk.Network
       , Cardano.Sdk.UTxO
       , Cardano.Sdk.Manual
       , Cardano.Sdk.Address
@@ -46,6 +48,7 @@ library
       , http-client-tls
       , http-conduit
       , cardano-api
+      , cardano-slotting
       , plutus-core
       , plutus-ledger
       , plutus-ledger-api
