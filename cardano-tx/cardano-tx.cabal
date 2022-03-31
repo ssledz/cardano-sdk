@@ -27,15 +27,16 @@ library
     import: base, project-config
     exposed-modules:
         Cardano.Sdk.Adapter.Node.Connection
-        Cardano.Sdk.Adapter.Node.Shared
-        Cardano.Sdk.Adapter.Node.Network
-        Cardano.Sdk.Adapter.Node.UTxO
+      , Cardano.Sdk.Adapter.Node.Shared
+      , Cardano.Sdk.Adapter.Node.Network
+      , Cardano.Sdk.Adapter.Node.UTxO
       , Cardano.Sdk.Adapter.Koios.UTxO
       , Cardano.Sdk.Network
       , Cardano.Sdk.UTxO
-      , Cardano.Sdk.Manual
       , Cardano.Sdk.Address
-      , MyLib
+      , Cardano.Sdk.Transaction.Data
+      , Cardano.Sdk.Transaction
+      , Manual
     build-depends:
         bytestring
       , base16-bytestring 

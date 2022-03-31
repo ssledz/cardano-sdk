@@ -1,4 +1,4 @@
-module Cardano.Sdk.Manual where
+module Manual where
 
 import qualified Cardano.Api                         as C
 import           Cardano.Sdk.Adapter.Koios.UTxO      as K
