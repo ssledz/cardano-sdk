@@ -27,15 +27,26 @@ data TxOutput = TxOutput
   , txOutputDatum :: Maybe Datum
   } deriving Show
 
+data TxOutputCandidate = TxOutputCandidate
+  { txOutputCandidateOut   :: TxOut
+  , txOutputCandidateDatum :: Maybe Datum
+  } deriving Show
+
 data TxBuilder = TxBuilder
   { txBuilderInputs     :: [TxInCandidate]
-  , txBuilderOutputs    :: [TxOutput]
+  , txBuilderOutputs    :: [TxOutputCandidate]
   , txBuilderChangeAddr :: ChangeAddress
   , txBulderCollateral  :: Maybe TxInCollateral
   , txBuilderValidRange :: SlotRange
   , txBuilderSigners    :: [PaymentPubKeyHash]
   } deriving (Show)
 
-txOutputToDatumMap :: TxOutput -> M.Map DatumHash Datum
-txOutputToDatumMap TxOutput{..} =
-  fromMaybe mempty (txOutDatumHash txOutputOut >>= (\hash -> fmap (M.singleton hash) txOutputDatum))
+txOutputToDatumMap :: TxOutputCandidate -> M.Map DatumHash Datum
+txOutputToDatumMap TxOutputCandidate{..} =
+  fromMaybe mempty (txOutDatumHash txOutputCandidateOut >>= (\hash -> fmap (M.singleton hash) txOutputCandidateDatum))
+
+collateralFromTxIn :: TxIn -> TxInCollateral
+collateralFromTxIn (TxIn ref _) = TxInCollateral ref
+
+txOutputToCandidate :: TxOutput -> TxOutputCandidate
+txOutputToCandidate TxOutput{..} = TxOutputCandidate txOutputOut txOutputDatum

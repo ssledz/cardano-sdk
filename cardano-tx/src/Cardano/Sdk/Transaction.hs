@@ -3,16 +3,15 @@
 
 module Cardano.Sdk.Transaction
   ( buildBalancedTx
+  , signTx
   , TransactionError (..)
   ) where
 
 import           Cardano.Api
 import           Cardano.Api.Shelley          (ProtocolParameters (..))
 import qualified Cardano.Api.Shelley          as C
-import qualified Cardano.Sdk.Address          as Sdk
 import qualified Cardano.Sdk.Network          as Sdk
 import qualified Cardano.Sdk.Transaction.Data as Sdk
-import qualified Cardano.Sdk.UTxO             as Sdk
 import qualified Data.Map                     as M
 import qualified Data.Set                     as S
 import qualified Data.Text                    as T
@@ -22,14 +21,30 @@ import qualified Ledger.Tx.CardanoAPI         as Conv
 import qualified Plutus.V1.Ledger.Api         as Api
 import           RIO
 
+signTx
+  :: TxBody AlonzoEra
+  -> [ShelleyWitnessSigningKey]
+  -> Tx AlonzoEra
+signTx body keys =
+  makeSignedTransaction wits body
+    where wits = keys <&> makeShelleyKeyWitness body
 
 buildBalancedTx
   :: Sdk.NetworkParameters
   -> Sdk.ChangeAddress
   -> S.Set Sdk.TxInCollateral
-  -> Sdk.TxInCandidate
+  -> Sdk.TxBuilder
   -> Either TransactionError (BalancedTxBody AlonzoEra)
-buildBalancedTx = undefined
+buildBalancedTx Sdk.NetworkParameters{..} changeAddr collateral txb@Sdk.TxBuilder{..}= do
+    txBody     <- buildTxBodyContent pparams network collateral txb
+    utxo       <- buildInputsUTxO network txBuilderInputs
+    let eraInMode    = AlonzoEraInCardanoMode
+        witOverrides = Nothing
+    changeAddr' <- adaptError $ Conv.toCardanoAddress network $ Sdk.unChangeAddress changeAddr
+    adaptError' $ makeTransactionBodyAutoBalance eraInMode sysstart eraHistory pparams pools utxo txBody changeAddr' witOverrides
+  where
+    adaptError' (Left err) = Left . TxBalancingError $ T.pack . show $ err
+    adaptError' (Right tx) = pure tx
 
 buildTxBodyContent
   :: ProtocolParameters
@@ -63,13 +78,13 @@ buildTxBodyContent pparams network collateral Sdk.TxBuilder{..} = do
 
 buildTxOuts
   :: NetworkId
-  -> [Sdk.TxOutput]
+  -> [Sdk.TxOutputCandidate]
   -> Either TransactionError [TxOut CtxTx AlonzoEra]
 buildTxOuts network =
     mapM (adaptError . tr)
   where
-    tr out@Sdk.TxOutput{..} =
-      Conv.toCardanoTxOut network (lookupDatum $ Sdk.txOutputToDatumMap out) txOutputOut
+    tr out@Sdk.TxOutputCandidate{..} =
+      Conv.toCardanoTxOut network (lookupDatum $ Sdk.txOutputToDatumMap out) txOutputCandidateOut
 
 buildTxCollateral
   :: [Sdk.TxInCollateral]
@@ -99,7 +114,7 @@ buildInputsUTxO network inputs = do
     tr :: Sdk.TxInCandidate ->  Either Conv.ToCardanoError (TxIn, TxOut CtxUTxO AlonzoEra)
     tr Sdk.TxInCandidate{txInCandidateTxOut=out@Sdk.TxOutput{..}} = do
       txIn  <- Conv.toCardanoTxIn txOutputRef
-      let dm = Sdk.txOutputToDatumMap out
+      let dm = Sdk.txOutputToDatumMap $ Sdk.txOutputToCandidate out
       txOut <- Conv.toCardanoTxOut network (lookupDatum dm) txOutputOut
       pure (txIn, toCtxUTxOTxOut txOut)
 
@@ -117,6 +132,7 @@ dummyFee = Ada.lovelaceValueOf 0
 
 data TransactionError
   = TxCardanoError Conv.ToCardanoError
+  | TxBalancingError T.Text
   | TxOtherError T.Text
   deriving (Show, Exception)
 

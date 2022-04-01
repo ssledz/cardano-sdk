@@ -2,9 +2,10 @@ module Cardano.Sdk.UTxO where
 
 import qualified Data.Map          as M
 
+import           Data.String
+import qualified Data.Text         as T
 import           Ledger
 import           PlutusTx.Foldable (fold)
-
 
 newtype UTxO = UTxO { unUTxO :: M.Map TxIn TxOut } deriving (Show, Eq)
 
@@ -37,3 +38,12 @@ instance ToLedgerValue a => ToLedgerValue [a] where
 
 instance ToLedgerUTxO a => ToLedgerUTxO [a] where
   toLedgerUTxO xs = mconcat $ toLedgerUTxO <$> xs
+
+parseTxIn :: T.Text -> Integer -> TxIn
+parseTxIn hash index = TxIn ref Nothing
+  where
+    txId' = fromString $ T.unpack hash
+    ref = TxOutRef txId' index
+
+findTxOutByTxIn :: UTxO -> TxIn -> Maybe TxOut
+findTxOutByTxIn utxo txIn = M.lookup txIn $ unUTxO utxo

@@ -49,6 +49,8 @@ library
       , http-client-tls
       , http-conduit
       , cardano-api
+      , cardano-cli
+      , ouroboros-network
       , cardano-slotting
       , plutus-core
       , plutus-ledger
