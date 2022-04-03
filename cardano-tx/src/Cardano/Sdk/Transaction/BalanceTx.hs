@@ -4,10 +4,12 @@ module Cardano.Sdk.Transaction.BalanceTx where
 
 import           Cardano.Api
 import           Cardano.Api.Shelley             (ProtocolParameters (..))
+import           Cardano.Sdk.Network             (NetworkParameters (eraHistory, sysstart))
 import qualified Cardano.Sdk.Network             as Sdk
 import           Cardano.Sdk.Transaction.BuildTx
 import           Cardano.Sdk.Transaction.Data
 import qualified Cardano.Sdk.Transaction.Data    as Sdk
+import           Data.Either.Extra               hiding (mapLeft)
 import           Data.List
 import qualified Data.Map                        as M
 import qualified Data.Text                       as T
@@ -20,11 +22,12 @@ buildBalancedTx
   -> Sdk.TxBuilder
   -> Sdk.TxBalancing
   -> Either Sdk.TransactionError (BalancedTxBody AlonzoEra)
-buildBalancedTx Sdk.NetworkParameters{..}  txb@Sdk.TxBuilder{..} Sdk.TxBalancing{txBalancingChangeAddr=Sdk.ChangeAddress{..},..}= do
+buildBalancedTx params@Sdk.NetworkParameters{..}  txb@Sdk.TxBuilder{..} Sdk.TxBalancing{txBalancingChangeAddr=Sdk.ChangeAddress{..},..}= do
     txContent  <- ensureMinAda =<< buildTxBodyContent pparams network txBalancingCollateral txb
     changeAddress' <- adaptError $ Conv.toCardanoAddress network changeAddress
     initialInputValue <- adaptError $ Conv.toCardanoValue (mconcat $ txInCandidateValue <$> txBuilderInputs)
-    balanceTx pparams network initialInputValue txBalancingInputs changeAddress' txContent
+    intitialInputUTxO <- buildInputsUTxO network txBuilderInputs
+    balanceTx params (intitialInputUTxO, initialInputValue) txBalancingInputs changeAddress' txContent
   where
     ensureMinAda txContent = do
       ensuredTxOuts <- mapM (ensureMinAdaTxOut pparams) $ txOuts txContent
@@ -38,24 +41,32 @@ instance Ord OrderedValue where
     in all (\(assetId, quantity) -> quantity <= selectAsset b assetId) valueList
 
 balanceTx
-  :: ProtocolParameters
-  -> NetworkId
-  -> Value
+  :: Sdk.NetworkParameters
+  -> (UTxO AlonzoEra, Value)
   -> [Sdk.TxInCandidate]
   -> AddressInEra AlonzoEra
   -> TxBodyContent BuildTx AlonzoEra
   -> Either Sdk.TransactionError (BalancedTxBody AlonzoEra)
-balanceTx pparams network initialInputValue inputs changeAddr txContent = do
-    UTxO utxo <- buildInputsUTxO network inputs
-    let inputs' = M.toList utxo
+balanceTx Sdk.NetworkParameters{..} (UTxO initialInputUTxO, initialInputValue) inputs changeAddr txContent = do
+    UTxO balancingUTxO <- buildInputsUTxO network inputs
+    let inputs' = M.toList balancingUTxO
+    let allUTxO = UTxO $ balancingUTxO <> initialInputUTxO
     let presortedInputs = sortOn (Down . valueToLovelace . txOutValue . snd) inputs'
-    go 0 presortedInputs
+    go 0 presortedInputs allUTxO
   where
     updateTx change fee txInputs = txContent
       { txIns = txIns txContent <> txInputs
       , txOuts = change : txOuts txContent
       , txFee = TxFeeExplicit TxFeesExplicitInAlonzoEra fee
       }
+    adjustExecutionUnits eunits tx = mapTxScriptWitnesses adjustScriptWitness tx
+      where
+        adjustScriptWitness si sw@(PlutusScriptWitness lang ver script datum redeemer _) =
+          let maybeExUnits = eitherToMaybe =<< M.lookup si eunits
+              tryUpdate = maybe sw $ PlutusScriptWitness lang ver script datum redeemer
+          in tryUpdate maybeExUnits
+        adjustScriptWitness _ sw = sw
+    evaluateTxExecutionUnits = evaluateTransactionExecutionUnits AlonzoEraInCardanoMode sysstart eraHistory pparams
     witnessedTxIn txIn = (txIn, BuildTxWith $ KeyWitness KeyWitnessForSpending)
     updateChange value = TxOut changeAddr (TxOutValue MultiAssetInAlonzoEra value) TxOutDatumNone
     txOutValue (TxOut _ value _) = txOutValueToValue value
@@ -63,7 +74,8 @@ balanceTx pparams network initialInputValue inputs changeAddr txContent = do
     valueUsefulness target value =
       let valueList = valueToList value
       in sum $ map (\(assetId, quantity) -> quantity `min` selectAsset target assetId) valueList
-    go additionalLovelace inputs' = do
+
+    go additionalLovelace inputs' utxo = do
       let outs = txOuts txContent
       let totalOutputValue = mconcat $ lovelaceToValue additionalLovelace : (txOutValue <$> outs)
 
@@ -89,8 +101,11 @@ balanceTx pparams network initialInputValue inputs changeAddr txContent = do
       let adjustFee fee = do
              let newChange = updateChange (changeValue <> negateValue (lovelaceToValue fee))
              let newTx = updateTx newChange fee witnessedTxIns
-             fee' <- calculateFee pparams newTx
-             if fee' > fee then adjustFee fee' else pure (newTx, newChange, fee)
+             txBody <- adaptToOtherError $ makeTransactionBody newTx
+             eunits <- adaptToOtherError $ evaluateTxExecutionUnits utxo txBody
+             let newTx' = debug "eunits: " eunits adjustExecutionUnits eunits newTx
+             fee' <- calculateFee pparams newTx'
+             if fee' > fee then adjustFee fee' else pure (newTx', newChange, fee)
 
       (txContent', change, fee) <- adjustFee 0
 
@@ -100,7 +115,7 @@ balanceTx pparams network initialInputValue inputs changeAddr txContent = do
       let neededAda = changeMinAda - changeActualAda
 
       if changeMinAda > changeActualAda
-        then go (additionalLovelace + neededAda) inputs'
+        then go (additionalLovelace + neededAda) inputs' utxo
         else do
          txBody <- adaptToOtherError $ makeTransactionBody txContent'
          return $ BalancedTxBody txBody change fee

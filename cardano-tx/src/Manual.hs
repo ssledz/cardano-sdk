@@ -124,7 +124,8 @@ payToScript2 :: IO ()
 payToScript2 = do
   networkParams <- N.queryNetworkParams nodeConn network
   userAddr <- addrOrError "addr_test1qp72kluzgdnl8h5cazhctxv773zrq7dzq8y50q2vr9w2v2laj7qf05z8tpyhc0k5kkks3083uthryl3leeufkfz6j0pq03n8ck"
-  scriptAddr <- addrOrError "addr_test1wz8npwnc5wcsml6uzu8a6u4qcqxaxfevsx4ep64wm6jxfhcnpl4zh"
+  --scriptAddr <- addrOrError "addr_test1wz8npwnc5wcsml6uzu8a6u4qcqxaxfevsx4ep64wm6jxfhcnpl4zh"
+  scriptAddr <- addrOrError "addr_test1wp3tms7sf5zrwm23d5ckvj2ykfww8tl6wmghlz67zfumf8gs6jh83"
   utxo <- K.queryUTxo koiosConfig [userAddr]
   --let collateral = collateralFromTxIn $ parseTxIn "17aac1962138c904f82db6e0c2b5c06ebb972a5cfa2ee2e81daff5ffd7c23d88" 0
 
@@ -133,7 +134,7 @@ payToScript2 = do
   let scriptDatumHash = L.datumHash <$> scriptDatum
   --print $ "datum Hash: " <> show scriptDatumHash
   let txBalancingInputs = txInCandidatesFromUTxO utxo
-  let txBuilderOutputs = [TxOutputCandidate (L.TxOut scriptAddr (Ada.lovelaceValueOf 2000014) scriptDatumHash) scriptDatum]
+  let txBuilderOutputs = [TxOutputCandidate (L.TxOut scriptAddr (Ada.lovelaceValueOf 4001114) scriptDatumHash) scriptDatum]
   let txBalancingChangeAddr = ChangeAddress userAddr
   let txBalancingCollateral = S.empty
   let txBuilderInputs = []
@@ -155,17 +156,20 @@ spendFromScript = do
   networkParams <- N.queryNetworkParams nodeConn network
 
   userAddr <- addrOrError "addr_test1qp72kluzgdnl8h5cazhctxv773zrq7dzq8y50q2vr9w2v2laj7qf05z8tpyhc0k5kkks3083uthryl3leeufkfz6j0pq03n8ck"
-  scriptAddr <- addrOrError "addr_test1wz8npwnc5wcsml6uzu8a6u4qcqxaxfevsx4ep64wm6jxfhcnpl4zh"
+  --scriptAddr <- addrOrError "addr_test1wz8npwnc5wcsml6uzu8a6u4qcqxaxfevsx4ep64wm6jxfhcnpl4zh"
+  scriptAddr <- addrOrError "addr_test1wp3tms7sf5zrwm23d5ckvj2ykfww8tl6wmghlz67zfumf8gs6jh83"
   scriptUtxo <- K.queryUTxo koiosConfig [scriptAddr]
   forM_ (M.toList $ unUTxO scriptUtxo) (\a -> print "-------\n" >> print a)
 
-  script <- Sdk.readFileScriptInAnyLang "/home/ssledz/git/simple-swap-playground/scripts/beneficiary/1/beneficiary.script"
+  --script <- Sdk.readFileScriptInAnyLang "/home/ssledz/git/simple-swap-playground/scripts/beneficiary/1/beneficiary.script"
+  script <- Sdk.readFileScriptInAnyLang "/home/ssledz/git/simple-swap-playground/scripts/simple-always-ok.script"
 
   scriptInEra <- liftMaybe "error during to script in era" $ C.toScriptInEra C.AlonzoEra script
 
   plutusScript <- liftMaybe "" $ Conv.fromCardanoScriptInEra scriptInEra
 
-  let scriptTxIn = parseTxIn "5e776338474f48d365fa6affe7f10ec667d92f425957e649625f24900531fdb5" 1
+  let scriptTxIn = parseTxIn "3b9b1249f999ea3df99b6fa0ab415cb6cc604c2a331e59fe18db6e70e9833b12" 1
+  --let scriptTxIn = parseTxIn "5e776338474f48d365fa6affe7f10ec667d92f425957e649625f24900531fdb5" 1
   let scriptTxRef = L.txInRef scriptTxIn
   scriptTxOut <- liftMaybe "Can't find txOut" $ findTxOutByTxIn scriptUtxo scriptTxIn
 
