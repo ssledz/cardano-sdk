@@ -2,6 +2,7 @@
 
 module Cardano.Sdk.Adapter.Node.Network
   ( queryNetworkParams
+  , queryProtocolParams
   ) where
 
 import           Cardano.Api

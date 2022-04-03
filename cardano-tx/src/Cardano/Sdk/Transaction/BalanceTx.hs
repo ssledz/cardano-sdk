@@ -47,10 +47,12 @@ balanceTx
   -> Either Sdk.TransactionError (BalancedTxBody AlonzoEra)
 balanceTx pparams network initialInputValue inputs changeAddr txContent = do
     UTxO utxo <- buildInputsUTxO network inputs
-    go 0 (M.toList utxo)
+    let inputs' = M.toList utxo
+    let presortedInputs = sortOn (Down . valueToLovelace . txOutValue . snd) inputs'
+    go 0 presortedInputs
   where
-    updateTx change fee inputs = txContent
-      { txIns = txIns txContent <> inputs
+    updateTx change fee txInputs = txContent
+      { txIns = txIns txContent <> txInputs
       , txOuts = change : txOuts txContent
       , txFee = TxFeeExplicit TxFeesExplicitInAlonzoEra fee
       }
@@ -61,7 +63,7 @@ balanceTx pparams network initialInputValue inputs changeAddr txContent = do
     valueUsefulness target value =
       let valueList = valueToList value
       in sum $ map (\(assetId, quantity) -> quantity `min` selectAsset target assetId) valueList
-    go additionalLovelace inputs = do
+    go additionalLovelace inputs' = do
       let outs = txOuts txContent
       let totalOutputValue = mconcat $ lovelaceToValue additionalLovelace : (txOutValue <$> outs)
 
@@ -79,13 +81,10 @@ balanceTx pparams network initialInputValue inputs changeAddr txContent = do
                   selected' = input:selected
                   acc' = acc <> (txOutValue . snd) input
               in selectCoins selected' acc' remaining
-      let presortedInputs = sortOn (Down . valueToLovelace . txOutValue . snd) inputs
-      (selected, selectedValue) <- selectCoins [] initialInputValue presortedInputs
+      (selected, selectedValue) <- selectCoins [] initialInputValue inputs'
 
       let changeValue = selectedValue <> negateValue totalOutputValue <> lovelaceToValue additionalLovelace
       let witnessedTxIns = witnessedTxIn . fst <$> selected
-
-      let adaFromTxOut = selectLovelace . txOutValue
 
       let adjustFee fee = do
              let newChange = updateChange (changeValue <> negateValue (lovelaceToValue fee))
@@ -93,15 +92,17 @@ balanceTx pparams network initialInputValue inputs changeAddr txContent = do
              fee' <- calculateFee pparams newTx
              if fee' > fee then adjustFee fee' else pure (newTx, newChange, fee)
 
-      (txContent, change, fee) <- adjustFee 0
+      (txContent', change, fee) <- adjustFee 0
 
       changeMinAda <- minAdaTxOut pparams change
+      let adaFromTxOut = selectLovelace . txOutValue
       let changeActualAda = adaFromTxOut change
       let neededAda = changeMinAda - changeActualAda
+
       if changeMinAda > changeActualAda
-        then go (additionalLovelace + neededAda) inputs
+        then go (additionalLovelace + neededAda) inputs'
         else do
-         txBody <- adaptToOtherError $ makeTransactionBody txContent
+         txBody <- adaptToOtherError $ makeTransactionBody txContent'
          return $ BalancedTxBody txBody change fee
 
 debug :: Show a => T.Text -> a -> b -> b

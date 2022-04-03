@@ -31,9 +31,11 @@ library
       , Cardano.Sdk.Adapter.Node.Network
       , Cardano.Sdk.Adapter.Node.UTxO
       , Cardano.Sdk.Adapter.Koios.UTxO
+      , Cardano.Sdk.Adapter.DbSync.Datum
       , Cardano.Sdk.Network
       , Cardano.Sdk.UTxO
       , Cardano.Sdk.Address
+      , Cardano.Sdk.Script
       , Cardano.Sdk.Transaction.Data
       , Cardano.Sdk.Transaction.BuildTx
       , Cardano.Sdk.Transaction.BalanceTx

@@ -21,8 +21,11 @@ import           Plutus.V1.Ledger.Api                              as A
 import           Plutus.V1.Ledger.Interval
 import           RIO
 
+import qualified Cardano.Sdk.Script                                as Sdk
 import qualified Cardano.Sdk.Transaction.BalanceTx                 as BTx
 import qualified Cardano.Sdk.Transaction.Data                      as Sdk
+import qualified Data.Map                                          as M
+import qualified Ledger.Tx.CardanoAPI                              as Conv
 
 network = C.Testnet $ C.NetworkMagic 1097911063
 koiosConfig = KoiosConfig "https://testnet.koios.rest" network
@@ -112,11 +115,14 @@ payToScript = do
   submitTx nodeConn tx
   print "Done."
 
+
+liftMaybe msg = maybe (throwString msg) return
+
+addrOrError addr = liftMaybe "address parsing error" (readShellyAddress addr)
+
 payToScript2 :: IO ()
 payToScript2 = do
   networkParams <- N.queryNetworkParams nodeConn network
-  let liftMaybe msg ma = maybe (throwString msg) return ma
-  let addrOrError addr = liftMaybe "address parsing error" (readShellyAddress addr)
   userAddr <- addrOrError "addr_test1qp72kluzgdnl8h5cazhctxv773zrq7dzq8y50q2vr9w2v2laj7qf05z8tpyhc0k5kkks3083uthryl3leeufkfz6j0pq03n8ck"
   scriptAddr <- addrOrError "addr_test1wz8npwnc5wcsml6uzu8a6u4qcqxaxfevsx4ep64wm6jxfhcnpl4zh"
   utxo <- K.queryUTxo koiosConfig [userAddr]
@@ -142,6 +148,55 @@ payToScript2 = do
   let tx = signTx txb [sKey]
   --print userTxOut
   submitTx nodeConn tx
+  print "Done."
+
+spendFromScript :: IO ()
+spendFromScript = do
+  networkParams <- N.queryNetworkParams nodeConn network
+
+  userAddr <- addrOrError "addr_test1qp72kluzgdnl8h5cazhctxv773zrq7dzq8y50q2vr9w2v2laj7qf05z8tpyhc0k5kkks3083uthryl3leeufkfz6j0pq03n8ck"
+  scriptAddr <- addrOrError "addr_test1wz8npwnc5wcsml6uzu8a6u4qcqxaxfevsx4ep64wm6jxfhcnpl4zh"
+  scriptUtxo <- K.queryUTxo koiosConfig [scriptAddr]
+  forM_ (M.toList $ unUTxO scriptUtxo) (\a -> print "-------\n" >> print a)
+
+  script <- Sdk.readFileScriptInAnyLang "/home/ssledz/git/simple-swap-playground/scripts/beneficiary/1/beneficiary.script"
+
+  scriptInEra <- liftMaybe "error during to script in era" $ C.toScriptInEra C.AlonzoEra script
+
+  plutusScript <- liftMaybe "" $ Conv.fromCardanoScriptInEra scriptInEra
+
+  let scriptTxIn = parseTxIn "5e776338474f48d365fa6affe7f10ec667d92f425957e649625f24900531fdb5" 1
+  let scriptTxRef = L.txInRef scriptTxIn
+  scriptTxOut <- liftMaybe "Can't find txOut" $ findTxOutByTxIn scriptUtxo scriptTxIn
+
+  let validator = Validator plutusScript
+
+  datum <- liftMaybe "Can't make datum" $ (A.fromBuiltinData . A.toBuiltinData) (911250625991234 :: Integer)
+  redeemer <- liftMaybe "Can't make redeemer" $ (A.fromBuiltinData . A.toBuiltinData) (0 :: Integer)
+
+  let scriptTxOutput = TxOutput scriptTxRef scriptTxOut Nothing
+  let scriptTxInTyp = L.ConsumeScriptAddress validator redeemer datum
+
+  let collateral = collateralFromTxIn $ parseTxIn "17aac1962138c904f82db6e0c2b5c06ebb972a5cfa2ee2e81daff5ffd7c23d88" 0
+  let txBalancingInputs = []
+  let txBalancingChangeAddr = ChangeAddress userAddr
+  let txBalancingCollateral = S.singleton collateral
+  let txBalancing = Sdk.TxBalancing {..}
+
+  let txBuilderOutputs = []
+  let txBuilderInputs = [TxInCandidate scriptTxOutput scriptTxInTyp]
+  let txBuilderValidRange = always
+  let txBuilderSigners = []
+  let txBuilder = TxBuilder {..}
+
+  (C.BalancedTxBody txb _ _) <- liftEither $ BTx.buildBalancedTx networkParams txBuilder txBalancing
+  print "Loading key..."
+  sKey <- signingExtKey' "/home/ssledz/git/simple-swap-playground/wallets/root/payment.skey"
+  print "Signing tx..."
+  let tx = signTx txb [sKey]
+  --print userTxOut
+  submitTx nodeConn tx
+
   print "Done."
 
 signingKey' :: String -> IO C.ShelleyWitnessSigningKey
