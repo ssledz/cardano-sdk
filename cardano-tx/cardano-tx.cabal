@@ -35,6 +35,8 @@ library
       , Cardano.Sdk.UTxO
       , Cardano.Sdk.Address
       , Cardano.Sdk.Transaction.Data
+      , Cardano.Sdk.Transaction.BuildTx
+      , Cardano.Sdk.Transaction.BalanceTx
       , Cardano.Sdk.Transaction
       , Manual
     build-depends:

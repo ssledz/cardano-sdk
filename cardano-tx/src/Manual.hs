@@ -83,12 +83,12 @@ payToScript = do
   userAddr <- addrOrError "addr_test1qp72kluzgdnl8h5cazhctxv773zrq7dzq8y50q2vr9w2v2laj7qf05z8tpyhc0k5kkks3083uthryl3leeufkfz6j0pq03n8ck"
   scriptAddr <- addrOrError "addr_test1wz8npwnc5wcsml6uzu8a6u4qcqxaxfevsx4ep64wm6jxfhcnpl4zh"
   utxo <- K.queryUTxo koiosConfig [userAddr]
-  let userTxIn = parseTxIn "56d7effe127cdefc551d33ca60271eaf84c587d3dcdffc0deed596003f2d62bb" 0
+  let userTxIn = parseTxIn "3507ed06c59c4373d31b1af4e59803475228d14c8566a804085a7552d7cfe81d" 0
   let userTxRef = L.txInRef userTxIn
   userTxOut <- liftMaybe "Can't find txOut" $ findTxOutByTxIn utxo userTxIn
   --let collateral = collateralFromTxIn $ parseTxIn "17aac1962138c904f82db6e0c2b5c06ebb972a5cfa2ee2e81daff5ffd7c23d88" 0
 
-  let scriptDatum = (A.fromBuiltinData . A.toBuiltinData) (11250625991234 :: Integer) :: Maybe Datum
+  let scriptDatum = (A.fromBuiltinData . A.toBuiltinData) (911250625991234 :: Integer) :: Maybe Datum
   let scriptDatumHash = L.datumHash <$> scriptDatum
   print $ "datum Hash: " <> show scriptDatumHash
   let userDatum = Nothing

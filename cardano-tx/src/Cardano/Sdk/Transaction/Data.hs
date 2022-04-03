@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass  #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Cardano.Sdk.Transaction.Data where
@@ -5,12 +6,17 @@ module Cardano.Sdk.Transaction.Data where
 import           Cardano.Sdk.Address
 import           Cardano.Sdk.Network
 import           Cardano.Sdk.UTxO
-import qualified Data.Map            as M
+import           Control.Exception
+import qualified Data.Map             as M
 import           Data.Maybe
+import qualified Data.Set             as S
+import qualified Data.Text            as T
 import           Ledger
+import qualified Ledger.Tx.CardanoAPI as Conv
+
 
 newtype ChangeAddress = ChangeAddress
-  { unChangeAddress :: Address } deriving (Show)
+  { changeAddress :: Address } deriving (Show)
 
 data TxInCandidate = TxInCandidate
   { txInCandidateTxOut :: TxOutput
@@ -32,14 +38,32 @@ data TxOutputCandidate = TxOutputCandidate
   , txOutputCandidateDatum :: Maybe Datum
   } deriving Show
 
+data TxBalancing = TxBalancing
+  { txBalancingInputs     :: [TxInCandidate]
+  , txBalancingChangeAddr :: ChangeAddress
+  , txBalancingCollateral :: S.Set TxInCollateral
+  }
+
 data TxBuilder = TxBuilder
   { txBuilderInputs     :: [TxInCandidate]
   , txBuilderOutputs    :: [TxOutputCandidate]
-  , txBuilderChangeAddr :: ChangeAddress
-  , txBulderCollateral  :: Maybe TxInCollateral
+  , txBuilderChangeAddr :: ChangeAddress -- to remove
   , txBuilderValidRange :: SlotRange
   , txBuilderSigners    :: [PaymentPubKeyHash]
   } deriving (Show)
+
+data TransactionError
+  = TxCardanoError Conv.ToCardanoError
+  | TxBalancingError T.Text
+  | TxInsufficentFundsError
+  | TxOtherError T.Text
+  deriving (Show, Exception)
+
+txInCandidateValue :: TxInCandidate -> Value
+txInCandidateValue = txOutValue . txOutputOut . txInCandidateTxOut
+
+txOutputCandidateValue :: TxOutputCandidate -> Value
+txOutputCandidateValue = txOutValue . txOutputCandidateOut
 
 txOutputToDatumMap :: TxOutputCandidate -> M.Map DatumHash Datum
 txOutputToDatumMap TxOutputCandidate{..} =
