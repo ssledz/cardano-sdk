@@ -64,6 +64,7 @@ balanceTx pparams network initialInputValue inputs changeAddr txContent = do
     go additionalLovelace inputs = do
       let outs = txOuts txContent
       let totalOutputValue = mconcat $ lovelaceToValue additionalLovelace : (txOutValue <$> outs)
+
       let selectCoins selected acc availableInputs
             | OV totalOutputValue <= OV acc           = Right (selected, acc)
             | null availableInputs                    = Left TxInsufficentFundsError
@@ -79,26 +80,29 @@ balanceTx pparams network initialInputValue inputs changeAddr txContent = do
                   acc' = acc <> (txOutValue . snd) input
               in selectCoins selected' acc' remaining
       let presortedInputs = sortOn (Down . valueToLovelace . txOutValue . snd) inputs
-      (selected, acc) <- selectCoins [] initialInputValue presortedInputs
-      let changeValue = acc <> negateValue totalOutputValue <> lovelaceToValue additionalLovelace
-      let debugSelected = debug "selected" selected
+      (selected, selectedValue) <- selectCoins [] initialInputValue presortedInputs
+
+      let changeValue = selectedValue <> negateValue totalOutputValue <> lovelaceToValue additionalLovelace
       let witnessedTxIns = witnessedTxIn . fst <$> selected
-      let txWithoutFee = debugSelected updateTx (updateChange changeValue) 0 witnessedTxIns
-      fee' <- calculateFee pparams txWithoutFee
-      let fee = fee' + 300
-      let debugFee = debug "fee" fee
-      let changeWithFeeAdjusted = debugFee updateChange (changeValue <> negateValue (lovelaceToValue fee))
-      changeWithMinAda <- ensureMinAdaTxOut pparams changeWithFeeAdjusted
+
       let adaFromTxOut = selectLovelace . txOutValue
-      let neededAda = adaFromTxOut changeWithMinAda - adaFromTxOut changeWithFeeAdjusted
-      let traceNeededAda =debug "!!!neededAda: " neededAda
-      if  traceNeededAda neededAda > 0
+
+      let adjustFee fee = do
+             let newChange = updateChange (changeValue <> negateValue (lovelaceToValue fee))
+             let newTx = updateTx newChange fee witnessedTxIns
+             fee' <- calculateFee pparams newTx
+             if fee' > fee then adjustFee fee' else pure (newTx, newChange, fee)
+
+      (txContent, change, fee) <- adjustFee 0
+
+      changeMinAda <- minAdaTxOut pparams change
+      let changeActualAda = adaFromTxOut change
+      let neededAda = changeMinAda - changeActualAda
+      if changeMinAda > changeActualAda
         then go (additionalLovelace + neededAda) inputs
         else do
-        let txContent = updateTx changeWithMinAda fee witnessedTxIns
---        let debugTxContent = debug "txContent: " txContent
-        txBody <- adaptToOtherError $ makeTransactionBody txContent
-        return $ BalancedTxBody txBody changeWithMinAda fee
+         txBody <- adaptToOtherError $ makeTransactionBody txContent
+         return $ BalancedTxBody txBody change fee
 
 debug :: Show a => T.Text -> a -> b -> b
 debug msg a = trace ("[DEBUG]   " <> msg <> ": " <> (T.pack . show) a)
@@ -106,9 +110,13 @@ debug msg a = trace ("[DEBUG]   " <> msg <> ": " <> (T.pack . show) a)
 adaptToOtherError :: Show err => Either err  b -> Either TransactionError b
 adaptToOtherError = mapLeft (Sdk.TxOtherError . T.pack . show)
 
+minAdaTxOut :: ProtocolParameters -> TxOut CtxTx AlonzoEra -> Either Sdk.TransactionError Lovelace
+minAdaTxOut pparams txOut =
+  adaptToOtherError $ selectLovelace <$> calculateMinimumUTxO ShelleyBasedEraAlonzo txOut pparams
+
 ensureMinAdaTxOut :: ProtocolParameters -> TxOut CtxTx AlonzoEra -> Either Sdk.TransactionError (TxOut CtxTx AlonzoEra)
 ensureMinAdaTxOut pparams txOut@(TxOut addr value datum) = do
-    expectedMinAda <- adaptToOtherError $ selectLovelace <$> calculateMinimumUTxO ShelleyBasedEraAlonzo txOut pparams
+    expectedMinAda <- minAdaTxOut pparams txOut
     let diff = expectedMinAda - txOutValueToLovelace value
     Right $ if diff > 0 then TxOut addr (addValue value diff) datum else txOut
   where

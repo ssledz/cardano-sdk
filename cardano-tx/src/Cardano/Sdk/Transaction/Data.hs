@@ -59,6 +59,13 @@ data TransactionError
   | TxOtherError T.Text
   deriving (Show, Exception)
 
+txInCandidatesFromUTxO :: UTxO -> [TxInCandidate]
+txInCandidatesFromUTxO (UTxO utxo) =
+  flip TxInCandidate ConsumePublicKeyAddress . txOutputFromUtxo <$> M.toList utxo
+
+txOutputFromUtxo :: (TxIn, TxOut) -> TxOutput
+txOutputFromUtxo (TxIn txRef _, txout) = TxOutput txRef txout Nothing
+
 txInCandidateValue :: TxInCandidate -> Value
 txInCandidateValue = txOutValue . txOutputOut . txInCandidateTxOut
 
