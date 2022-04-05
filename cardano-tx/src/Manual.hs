@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Manual where
 
@@ -16,11 +17,14 @@ import qualified Data.ByteString                                   as BS
 import qualified Data.Set                                          as S
 import qualified Ledger                                            as L
 import qualified Ledger.Ada                                        as Ada
+import qualified Ledger.Constraints                                as LC
+import qualified Ledger.Constraints.TxConstraints                  as LCT
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (SubmitFail, SubmitSuccess))
 import           Plutus.V1.Ledger.Api                              as A
 import           Plutus.V1.Ledger.Interval
 import           RIO
 
+import           Cardano.Sdk.Network                               (NetworkParameters)
 import qualified Cardano.Sdk.Script                                as Sdk
 import qualified Cardano.Sdk.Transaction.BalanceTx                 as BTx
 import qualified Cardano.Sdk.Transaction.Data                      as Sdk
@@ -150,6 +154,60 @@ payToScript2 = do
   --print userTxOut
   submitTx nodeConn tx
   print "Done."
+
+
+data TestCase = TestCase
+  { userAddr      :: L.Address
+  , scriptAddr    :: L.Address
+  , script        :: L.Script
+  , rawDatum      :: Integer
+  , datum         :: L.Datum
+  , redeemer      :: L.Redeemer
+  , validator     :: L.Validator
+  , validatorHash :: L.ValidatorHash
+  , networkParams :: NetworkParameters
+  }
+
+mkTestCase :: IO TestCase
+mkTestCase = do
+  networkParams <- N.queryNetworkParams nodeConn network
+  userAddr <- addrOrError "addr_test1qp72kluzgdnl8h5cazhctxv773zrq7dzq8y50q2vr9w2v2laj7qf05z8tpyhc0k5kkks3083uthryl3leeufkfz6j0pq03n8ck"
+  scriptAny <- Sdk.readFileScriptInAnyLang "/home/ssledz/git/simple-swap-playground/scripts/simple-always-ok.script"
+  scriptInEra <- liftMaybe "error during to script in era" $ C.toScriptInEra C.AlonzoEra scriptAny
+  script <- liftMaybe "" $ Conv.fromCardanoScriptInEra scriptInEra
+  scriptAddr <- addrOrError "addr_test1wp3tms7sf5zrwm23d5ckvj2ykfww8tl6wmghlz67zfumf8gs6jh83"
+  let rawDatum = 911250625991234
+  datum <- liftMaybe "Can't make datum" $ (A.fromBuiltinData . A.toBuiltinData) rawDatum
+  redeemer <- liftMaybe "Can't make redeemer" $ (A.fromBuiltinData . A.toBuiltinData) (0 :: Integer)
+  let validator = Validator script
+  let validatorHash = L.validatorHash validator
+  return TestCase {..}
+
+toPaymentPubKeyHash :: L.Address -> Maybe L.PaymentPubKeyHash
+toPaymentPubKeyHash addr = L.PaymentPubKeyHash <$> L.toPubKeyHash addr
+
+payToScriptUsingConstraints :: IO ()
+payToScriptUsingConstraints = do
+  TestCase{..} <- mkTestCase
+  userUtxo <- K.queryUTxo koiosConfig [userAddr]
+  userPubKeyHash <- liftMaybe "can't make pub key hash" $ toPaymentPubKeyHash userAddr
+  let constraints :: LC.TxConstraints Void Void
+      constraints  =
+        LCT.mustPayToOtherScript validatorHash datum (Ada.lovelaceValueOf 2171107)
+          <> LC.mustIncludeDatum datum
+     --     <> LC.mustPayToPubKey userPubKeyHash (Ada.lovelaceValueOf 100000)
+  let lookups = LC.otherScript validator
+  unBalancedTx <- liftEither $ LC.mkTx @Void lookups constraints
+  print unBalancedTx
+  let userUtxo' =  M.mapKeys (\(L.TxIn ref _) -> ref) $ unUTxO userUtxo
+  (C.BalancedTxBody txb _ _) <- liftEither $ BTx.buildBalancedTx2 networkParams userUtxo' (ChangeAddress userAddr) unBalancedTx
+  print "Loading key..."
+  sKey <- signingExtKey' "/home/ssledz/git/simple-swap-playground/wallets/root/payment.skey"
+  print "Signing tx..."
+  let tx = signTx txb [sKey]
+  submitTx nodeConn tx
+  print "Done."
+
 
 spendFromScript :: IO ()
 spendFromScript = do
