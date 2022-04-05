@@ -12,6 +12,7 @@ import qualified Cardano.Sdk.Transaction.Data    as Sdk
 import           Data.Either.Extra               hiding (mapLeft)
 import           Data.List
 import qualified Data.Map                        as M
+import qualified Data.Set                        as S
 import qualified Data.Text                       as T
 import qualified Ledger                          as L
 import qualified Ledger.Constraints              as L
@@ -46,12 +47,14 @@ buildBalancedTx2
   -> M.Map L.TxOutRef L.TxOut
   -> ChangeAddress
   -> L.UnbalancedTx
+  -> S.Set Sdk.TxInCollateral
   -> Either Sdk.TransactionError (BalancedTxBody AlonzoEra)
-buildBalancedTx2 params@Sdk.NetworkParameters{..} utxos ChangeAddress{..} L.UnbalancedTx{..} = do
+buildBalancedTx2 params@Sdk.NetworkParameters{..} utxos ChangeAddress{..} L.UnbalancedTx{..} collaterals = do
     changeAddress' <- adaptError $ Conv.toCardanoAddress network changeAddress
     let reqSigs = M.keys unBalancedTxRequiredSignatories
+    txInsCollateral <- buildTxCollateral $ S.toList collaterals
     txContent <- adaptError $ Conv.toCardanoTxBodyContent reqSigs (Just pparams) network unBalancedTxTx
-    adjustedTxContent <- ensureMinAda txContent
+    adjustedTxContent <- ensureMinAda (addCollaterals txInsCollateral txContent)
     balancingUTxO <- toCardanoUTxO network utxos
     txInUTxO <- toCardanoUTxO network unBalancedTxUtxoIndex
     balanceTx2 params adjustedTxContent txInUTxO balancingUTxO changeAddress'
@@ -59,6 +62,7 @@ buildBalancedTx2 params@Sdk.NetworkParameters{..} utxos ChangeAddress{..} L.Unba
     ensureMinAda txContent = do
       ensuredTxOuts <- mapM (ensureMinAdaTxOut pparams) $ txOuts txContent
       pure $ txContent {txOuts = ensuredTxOuts}
+    addCollaterals cs txContent = txContent { txInsCollateral = cs }
 
 toCardanoUTxO :: NetworkId -> M.Map L.TxOutRef L.TxOut -> Either Sdk.TransactionError (UTxO AlonzoEra)
 toCardanoUTxO network utxos = mapM (adaptError . translate ) (M.toList utxos) <&> UTxO . M.fromList

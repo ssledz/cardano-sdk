@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Manual where
@@ -29,6 +30,7 @@ import qualified Cardano.Sdk.Script                                as Sdk
 import qualified Cardano.Sdk.Transaction.BalanceTx                 as BTx
 import qualified Cardano.Sdk.Transaction.Data                      as Sdk
 import qualified Data.Map                                          as M
+import qualified Data.Text                                         as T
 import qualified Ledger.Tx.CardanoAPI                              as Conv
 
 network = C.Testnet $ C.NetworkMagic 1097911063
@@ -166,6 +168,7 @@ data TestCase = TestCase
   , validator     :: L.Validator
   , validatorHash :: L.ValidatorHash
   , networkParams :: NetworkParameters
+  , collaterals   :: S.Set Sdk.TxInCollateral
   }
 
 mkTestCase :: IO TestCase
@@ -181,6 +184,9 @@ mkTestCase = do
   redeemer <- liftMaybe "Can't make redeemer" $ (A.fromBuiltinData . A.toBuiltinData) (0 :: Integer)
   let validator = Validator script
   let validatorHash = L.validatorHash validator
+  let collateral = collateralFromTxIn $ parseTxIn "17aac1962138c904f82db6e0c2b5c06ebb972a5cfa2ee2e81daff5ffd7c23d88" 0
+  let collaterals = S.singleton collateral
+
   return TestCase {..}
 
 toPaymentPubKeyHash :: L.Address -> Maybe L.PaymentPubKeyHash
@@ -200,7 +206,56 @@ payToScriptUsingConstraints = do
   unBalancedTx <- liftEither $ LC.mkTx @Void lookups constraints
   print unBalancedTx
   let userUtxo' =  M.mapKeys (\(L.TxIn ref _) -> ref) $ unUTxO userUtxo
-  (C.BalancedTxBody txb _ _) <- liftEither $ BTx.buildBalancedTx2 networkParams userUtxo' (ChangeAddress userAddr) unBalancedTx
+  (C.BalancedTxBody txb _ _) <- liftEither $ BTx.buildBalancedTx2 networkParams userUtxo' (ChangeAddress userAddr) unBalancedTx S.empty
+  print "Loading key..."
+  sKey <- signingExtKey' "/home/ssledz/git/simple-swap-playground/wallets/root/payment.skey"
+  print "Signing tx..."
+  let tx = signTx txb [sKey]
+  submitTx nodeConn tx
+  print "Done."
+
+parseTxOutRef :: T.Text -> Integer -> TxOutRef
+parseTxOutRef txId idx = L.txInRef $ parseTxIn txId idx
+
+toChainIndexUTxO :: UTxO -> M.Map L.TxOutRef L.ChainIndexTxOut
+toChainIndexUTxO (UTxO utxo) = M.fromList $mapMaybe translate (M.toList utxo)
+  where
+    --translate (L.TxIn txRef _, txOut) =  (\o -> (txRef, o)) <$> L.fromTxOut txOut
+    translate (L.TxIn txRef _, txOut) =  (txRef, ) <$> L.fromTxOut txOut
+
+
+adjustDatum :: L.Datum  -> M.Map L.TxOutRef L.ChainIndexTxOut -> M.Map L.TxOutRef L.ChainIndexTxOut
+adjustDatum datum xs =
+    let dh = L.datumHash datum
+        --ys = (\(k, v) -> (k, f dh v)) <$> M.toList xs
+        ys = second (f dh) <$> M.toList xs
+    in M.fromList ys
+  where
+    f :: L.DatumHash -> L.ChainIndexTxOut -> L.ChainIndexTxOut
+    f dh o@(L.ScriptChainIndexTxOut _ _ (Left dh2) _) =
+      if dh == dh2 then o {L._ciTxOutDatum = Right datum} else o
+    f dh o = o
+
+spendFromScriptUsingConstraints :: IO ()
+spendFromScriptUsingConstraints = do
+  TestCase{..} <- mkTestCase
+  userUtxo <- K.queryUTxo koiosConfig [userAddr]
+  scriptUTxO <- K.queryUTxo koiosConfig [scriptAddr]
+  userPubKeyHash <- liftMaybe "can't make pub key hash" $ toPaymentPubKeyHash userAddr
+
+  let scriptCIUTxO = adjustDatum datum $ toChainIndexUTxO scriptUTxO
+  let txOutRef = parseTxOutRef "44d4842dd1a543750bdb6ac66a1812b9ff06b5735acd6627e0233340b3b80103" 1
+  let constraints :: LC.TxConstraints Void Void
+      constraints = LC.mustSpendScriptOutput txOutRef redeemer
+                 <> LC.mustPayToPubKey userPubKeyHash (Ada.lovelaceValueOf 2171107)
+
+  let lookups :: LC.ScriptLookups Void
+      lookups = LC.otherScript validator
+              <> LC.unspentOutputs scriptCIUTxO
+
+  let userUtxo' =  M.mapKeys (\(L.TxIn ref _) -> ref) $ unUTxO userUtxo
+  unBalancedTx <- liftEither $ LC.mkTx @Void lookups constraints
+  (C.BalancedTxBody txb _ _) <- liftEither $ BTx.buildBalancedTx2 networkParams userUtxo' (ChangeAddress userAddr) unBalancedTx collaterals
   print "Loading key..."
   sKey <- signingExtKey' "/home/ssledz/git/simple-swap-playground/wallets/root/payment.skey"
   print "Signing tx..."
