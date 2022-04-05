@@ -244,17 +244,23 @@ spendFromScriptUsingConstraints = do
   userPubKeyHash <- liftMaybe "can't make pub key hash" $ toPaymentPubKeyHash userAddr
 
   let scriptCIUTxO = adjustDatum datum $ toChainIndexUTxO scriptUTxO
-  let txOutRef = parseTxOutRef "44d4842dd1a543750bdb6ac66a1812b9ff06b5735acd6627e0233340b3b80103" 1
+  let txOutRef = parseTxOutRef "a4104aab8cceb09fd701095da7d3a1900a4e268f056d2ed02a96f54f10edc602" 1
+
+  let restricredCIUTxO = M.restrictKeys scriptCIUTxO $ S.singleton txOutRef
+
+  print restricredCIUTxO
+
   let constraints :: LC.TxConstraints Void Void
       constraints = LC.mustSpendScriptOutput txOutRef redeemer
-                 <> LC.mustPayToPubKey userPubKeyHash (Ada.lovelaceValueOf 2171107)
+                 <> LC.mustPayToPubKey userPubKeyHash (Ada.lovelaceValueOf 1171107)
 
   let lookups :: LC.ScriptLookups Void
       lookups = LC.otherScript validator
-              <> LC.unspentOutputs scriptCIUTxO
+              <> LC.unspentOutputs restricredCIUTxO
 
   let userUtxo' =  M.mapKeys (\(L.TxIn ref _) -> ref) $ unUTxO userUtxo
   unBalancedTx <- liftEither $ LC.mkTx @Void lookups constraints
+  print unBalancedTx
   (C.BalancedTxBody txb _ _) <- liftEither $ BTx.buildBalancedTx2 networkParams userUtxo' (ChangeAddress userAddr) unBalancedTx collaterals
   print "Loading key..."
   sKey <- signingExtKey' "/home/ssledz/git/simple-swap-playground/wallets/root/payment.skey"
