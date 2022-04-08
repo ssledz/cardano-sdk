@@ -3,6 +3,7 @@
 
 module Cardano.Sdk.Transaction.Data where
 
+import qualified Cardano.Api          as C
 import           Cardano.Sdk.Address
 import           Cardano.Sdk.Network
 import           Cardano.Sdk.UTxO
@@ -55,6 +56,7 @@ data TxBuilder = TxBuilder
 data TransactionError
   = TxCardanoError Conv.ToCardanoError
   | TxBalancingError T.Text
+  | TxCardanoBodyError C.TxBodyError
   | TxInsufficentFundsError
   | TxOtherError T.Text
   deriving (Show, Exception)

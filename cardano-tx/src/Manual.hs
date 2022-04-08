@@ -199,7 +199,7 @@ payToScriptUsingConstraints = do
   userPubKeyHash <- liftMaybe "can't make pub key hash" $ toPaymentPubKeyHash userAddr
   let constraints :: LC.TxConstraints Void Void
       constraints  =
-        LCT.mustPayToOtherScript validatorHash datum (Ada.lovelaceValueOf 2171107)
+        LCT.mustPayToOtherScript validatorHash datum (Ada.lovelaceValueOf 2222222)
           <> LC.mustIncludeDatum datum
      --     <> LC.mustPayToPubKey userPubKeyHash (Ada.lovelaceValueOf 100000)
   let lookups = LC.otherScript validator
@@ -244,7 +244,7 @@ spendFromScriptUsingConstraints = do
   userPubKeyHash <- liftMaybe "can't make pub key hash" $ toPaymentPubKeyHash userAddr
 
   let scriptCIUTxO = adjustDatum datum $ toChainIndexUTxO scriptUTxO
-  let txOutRef = parseTxOutRef "a4104aab8cceb09fd701095da7d3a1900a4e268f056d2ed02a96f54f10edc602" 1
+  let txOutRef = parseTxOutRef "022876a151316adaecf750e6b369ee00e4bbddd6b9e9fa588b6fc81f2875efcc" 1
 
   let restricredCIUTxO = M.restrictKeys scriptCIUTxO $ S.singleton txOutRef
 
@@ -252,7 +252,7 @@ spendFromScriptUsingConstraints = do
 
   let constraints :: LC.TxConstraints Void Void
       constraints = LC.mustSpendScriptOutput txOutRef redeemer
-                 <> LC.mustPayToPubKey userPubKeyHash (Ada.lovelaceValueOf 1171107)
+                 <> LC.mustPayToPubKey userPubKeyHash (Ada.lovelaceValueOf 2222222)
 
   let lookups :: LC.ScriptLookups Void
       lookups = LC.otherScript validator
@@ -287,7 +287,7 @@ spendFromScript = do
 
   plutusScript <- liftMaybe "" $ Conv.fromCardanoScriptInEra scriptInEra
 
-  let scriptTxIn = parseTxIn "3b9b1249f999ea3df99b6fa0ab415cb6cc604c2a331e59fe18db6e70e9833b12" 1
+  let scriptTxIn = parseTxIn "c70428d0172e3ac81e6e778b7457d17aa30ed7a6203f7242c917f6c7545626ed" 1
   --let scriptTxIn = parseTxIn "5e776338474f48d365fa6affe7f10ec667d92f425957e649625f24900531fdb5" 1
   let scriptTxRef = L.txInRef scriptTxIn
   scriptTxOut <- liftMaybe "Can't find txOut" $ findTxOutByTxIn scriptUtxo scriptTxIn

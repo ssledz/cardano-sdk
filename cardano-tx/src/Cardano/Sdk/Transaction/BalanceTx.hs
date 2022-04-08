@@ -138,24 +138,41 @@ balanceTx2 Sdk.NetworkParameters{..} txContent txInUTxO (UTxO balancingUTxO) cha
       let adjustFee fee = do
              let newChange = updateChange (changeValue <> negateValue (lovelaceToValue fee))
              let newTx = updateTx newChange fee witnessedTxIns
-             txBody <- adaptToOtherError $ makeTransactionBody newTx
+             txBody <- adaptToTxBodyError $ makeTransactionBody newTx
              eunits <- adaptToOtherError $ evaluateTxExecutionUnits utxo txBody
              let newTx' = debug "eunits: " eunits adjustExecutionUnits eunits newTx
              fee' <- calculateFee pparams newTx'
              if fee' > fee then adjustFee fee' else pure (newTx', newChange, fee)
 
-      (txContent', change, fee) <- adjustFee 0
 
-      changeMinAda <- minAdaTxOut pparams change
-      let adaFromTxOut = selectLovelace . txOutValue
-      let changeActualAda = adaFromTxOut change
-      let neededAda = changeMinAda - changeActualAda
+      case adjustFee 0 of
+        Left (Sdk.TxCardanoBodyError (TxBodyOutputNegative q _)) -> go (additionalLovelace - quantityToLovelace q) inputs utxo txInValue
+        Right (txContent', change, fee) -> do
+           changeMinAda <- minAdaTxOut pparams change
+           let adaFromTxOut = selectLovelace . txOutValue
+           let changeActualAda = adaFromTxOut change
+           let neededAda = changeMinAda - changeActualAda
 
-      if changeMinAda > changeActualAda
-        then go (additionalLovelace + neededAda) inputs utxo txInValue
-        else do
-         txBody <- adaptToOtherError $ makeTransactionBody txContent'
-         return $ BalancedTxBody txBody change fee
+           if changeMinAda > changeActualAda
+           then go (additionalLovelace + neededAda) inputs utxo txInValue
+           else do
+             txBody <- adaptToOtherError $ makeTransactionBody txContent'
+             return $ BalancedTxBody txBody change fee
+
+        Left err ->  Left . Sdk.TxOtherError $ T.pack (show err)
+
+--      (txContent', change, fee) <- adjustFee 0
+
+--      changeMinAda <- minAdaTxOut pparams change
+--      let adaFromTxOut = selectLovelace . txOutValue
+--      let changeActualAda = adaFromTxOut change
+--      let neededAda = changeMinAda - changeActualAda
+
+--      if changeMinAda > changeActualAda
+--        then go (additionalLovelace + neededAda) inputs utxo txInValue
+--        else do
+--         txBody <- adaptToOtherError $ makeTransactionBody txContent'
+--         return $ BalancedTxBody txBody change fee
 
 balanceTx
   :: Sdk.NetworkParameters
@@ -242,6 +259,9 @@ debug msg a = trace ("[DEBUG]   " <> msg <> ": " <> (T.pack . show) a)
 
 adaptToOtherError :: Show err => Either err  b -> Either TransactionError b
 adaptToOtherError = mapLeft (Sdk.TxOtherError . T.pack . show)
+
+adaptToTxBodyError :: Either TxBodyError b -> Either TransactionError b
+adaptToTxBodyError = mapLeft Sdk.TxCardanoBodyError
 
 minAdaTxOut :: ProtocolParameters -> TxOut CtxTx AlonzoEra -> Either Sdk.TransactionError Lovelace
 minAdaTxOut pparams txOut =
